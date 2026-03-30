@@ -1,0 +1,13 @@
+{
+  "name": "ams-ide",
+  "version": "1.0.0",
+  "description": "AMS-Lang Full Stack Observability IDE",
+  "private": true,
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "dev": "start-dev.bat",
+    "build:server": "cd server && npm run build",
+    "build:client": "cd client && npm run build"
+  }
+}
+
