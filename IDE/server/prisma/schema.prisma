@@ -1,0 +1,190 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────
+
+enum SystemRole {
+  SUPER_ADMIN
+  USER
+}
+
+enum ProjectRole {
+  ADMIN
+  VIEWER
+}
+
+enum RuleType {
+  GUI
+  SCRIPT
+}
+
+enum SourceType {
+  NGINX
+  APACHE
+  SYSLOG
+  CLOUDWATCH
+  CUSTOM
+}
+
+enum ChannelType {
+  DASHBOARD
+  EMAIL
+  SLACK
+  DISCORD
+}
+
+// ─── Models ──────────────────────────────────────────────────
+
+model User {
+  id            String       @id @default(uuid()) @db.Uuid
+  name          String
+  email         String       @unique
+  password_hash String
+  system_role   SystemRole   @default(USER)
+  created_at    DateTime     @default(now())
+
+  memberships   ProjectMember[]
+  rule_mappings RuleUserMapping[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Project {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  created_at DateTime @default(now())
+
+  members    ProjectMember[]
+  rules      DetectionRule[]
+  sources    LogSource[]
+  routes     AlertRoute[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  user_id      String      @db.Uuid
+  project_id   String      @db.Uuid
+  project_role ProjectRole @default(VIEWER)
+  joined_at    DateTime    @default(now())
+
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, project_id])
+  @@map("project_members")
+}
+
+model DetectionRule {
+  id              String   @id @default(uuid()) @db.Uuid
+  project_id      String   @db.Uuid
+  name            String
+  rule_type       RuleType @default(GUI)
+  condition_logic Json?
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  project       Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  script_file   ScriptFile?
+  user_mappings RuleUserMapping[]
+  route_mappings RuleRouteMapping[]
+
+  @@map("detection_rules")
+}
+
+model ScriptFile {
+  id           String  @id @default(uuid()) @db.Uuid
+  rule_id      String  @unique @db.Uuid
+  storage_path String
+  is_executing Boolean @default(false)
+
+  rule DetectionRule @relation(fields: [rule_id], references: [id], onDelete: Cascade)
+
+  @@map("script_files")
+}
+
+model LogSource {
+  id          String     @id @default(uuid()) @db.Uuid
+  project_id  String     @db.Uuid
+  name        String
+  source_type SourceType @default(CUSTOM)
+  api_key     String
+  created_at  DateTime   @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@map("log_sources")
+}
+
+model AlertRoute {
+  id         String @id @default(uuid()) @db.Uuid
+  project_id String @db.Uuid
+  name       String
+
+  project  Project          @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  channels AlertChannel[]
+  rule_mappings RuleRouteMapping[]
+
+  @@map("alert_routes")
+}
+
+model AlertChannel {
+  id           String      @id @default(uuid()) @db.Uuid
+  route_id     String      @db.Uuid
+  channel_type ChannelType @default(DASHBOARD)
+  webhook_url  String?
+
+  route AlertRoute @relation(fields: [route_id], references: [id], onDelete: Cascade)
+
+  @@map("alert_channels")
+}
+
+model RuleUserMapping {
+  rule_id String @db.Uuid
+  user_id String @db.Uuid
+
+  rule DetectionRule @relation(fields: [rule_id], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([rule_id, user_id])
+  @@map("rule_user_mappings")
+}
+
+model RuleRouteMapping {
+  rule_id  String @db.Uuid
+  route_id String @db.Uuid
+
+  rule  DetectionRule @relation(fields: [rule_id], references: [id], onDelete: Cascade)
+  route AlertRoute    @relation(fields: [route_id], references: [id], onDelete: Cascade)
+
+  @@id([rule_id, route_id])
+  @@map("rule_route_mappings")
+}
+
+// ─── Dashboard Notifications ─────────────────────────────────
+
+model Notification {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  title      String
+  message    String
+  severity   String   @default("info")
+  is_read    Boolean  @default(false)
+  rule_name  String?
+  project_id String?  @db.Uuid
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, is_read])
+  @@map("notifications")
+}
