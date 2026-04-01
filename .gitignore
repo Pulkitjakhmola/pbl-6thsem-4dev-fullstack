@@ -1,0 +1,21 @@
+
+# Node modules
+node_modules/
+IDE/client/node_modules/
+IDE/server/node_modules/
+
+# Build output
+ams-lang/build/
+ams-lang-updated/build/
+
+# Generated ANTLR files
+ams-lang/generated/
+ams-lang-updated/generated/
+
+# Environment variables
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db

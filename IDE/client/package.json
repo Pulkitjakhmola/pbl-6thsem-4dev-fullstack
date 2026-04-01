@@ -1,0 +1,31 @@
+{
+  "name": "ams-ide-client",
+  "version": "1.0.0",
+  "description": "AMS-Lang Desktop IDE",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev:web": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "electron:setup": "npm install --no-save electron vite-plugin-electron vite-plugin-electron-renderer wait-on",
+    "electron:dev": "wait-on http://localhost:5173 && electron ."
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
+    "axios": "^1.6.8",
+    "lucide-react": "^0.372.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.13.1",
+    "recharts": "^2.12.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "@types/react": "^18.2.79",
+    "@types/react-dom": "^18.2.25",
+    "@vitejs/plugin-react": "^4.2.1",
+    "electron": "^41.0.3",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.8"
+  }
+}
