@@ -123,7 +123,7 @@ export async function dispatchNotification(opts: {
               await transporter.sendMail({
                 from: process.env.SMTP_FROM || '"AMS Scanner" <alerts@ams.local>',
                 to: channel.webhook_url, 
-                subject: `🚨 AMS Alert: ${title}`,
+                subject: `[AMS ALERT] ${title}`,
                 text: `${message}\n\nSeverity: ${severity}\nRule: ${rule?.name}\nProject ID: ${projectId}`,
               });
 
@@ -140,7 +140,7 @@ export async function dispatchNotification(opts: {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  text: `🚨 *${title}*\n${message}\nSeverity: ${severity}`,
+                  text: `[ALERT] *${title}*\n${message}\nSeverity: ${severity}`,
                 }),
               });
             } catch (e) { console.error('[SLACK] Error:', e); }
@@ -153,7 +153,7 @@ export async function dispatchNotification(opts: {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  content: `🚨 **${title}**\n${message}\n*Severity: ${severity}*`,
+                  content: `[ALERT] **${title}**\n${message}\n*Severity: ${severity}*`,
                 }),
               });
             } catch (e) { console.error('[DISCORD] Error:', e); }
