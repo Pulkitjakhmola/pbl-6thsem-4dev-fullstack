@@ -1,31 +1,45 @@
 import { Router, Request, Response } from 'express';
 import { spawn } from 'child_process';
 import { writeFile, unlink, mkdir } from 'fs/promises';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { tmpdir } from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../index.js';
 
 export const compileRouter = Router();
 
-// Locate the ams.exe compiler
-const COMPILER_PATH =
-  process.env.AMS_COMPILER_PATH ??
-  'D:\\coding\\compiler_pbl\\ams-lang\\build\\ams.exe';
-
 /**
  * POST /api/compile
- * Body: { source: string, sessionId?: string }
+ * Body: { source: string, sessionId?: string, compilerPath?: string, compileCommand?: string, fileExtension?: string }
+ *
+ * compileCommand uses {FILE} as a placeholder for the temp input file.
+ * Example: "build {FILE}" → ["build", "/tmp/.../abc.ams"]
+ * Example: "-o {FILE}.out {FILE}" → ["-o", "/tmp/.../abc.c.out", "/tmp/.../abc.c"]
+ *
  * Streams SSE events: { stage, message, artifact? }
  */
 compileRouter.post('/', async (req: Request, res: Response): Promise<void> => {
-  const { source, sessionId = uuidv4() } = req.body as {
+  const {
+    source,
+    sessionId = uuidv4(),
+    compilerPath,
+    compileCommand = '{FILE}',
+    fileExtension = '.tmp',
+  } = req.body as {
     source: string;
     sessionId?: string;
+    compilerPath?: string;
+    compileCommand?: string;
+    fileExtension?: string;
   };
 
   if (!source || typeof source !== 'string') {
     res.status(400).json({ error: 'source is required' });
+    return;
+  }
+
+  if (!compilerPath) {
+    res.status(400).json({ error: 'compilerPath is required. Configure it in Settings.' });
     return;
   }
 
@@ -42,44 +56,57 @@ compileRouter.post('/', async (req: Request, res: Response): Promise<void> => {
   };
 
   // ── Write source to temp file ─────────────────────────────
-  const tmpDir = join(tmpdir(), 'ams-ide');
+  const tmpDir = join(tmpdir(), 'amscode-ide');
   await mkdir(tmpDir, { recursive: true });
-  const inputFile = join(tmpDir, `${sessionId}.ams`);
-  const outputFile = join(tmpDir, `${sessionId}.out`);
+  const ext = fileExtension.startsWith('.') ? fileExtension : `.${fileExtension}`;
+  const inputFile = join(tmpDir, `${sessionId}${ext}`);
 
   try {
     await writeFile(inputFile, source, 'utf8');
     send('lexing', 'Wrote source to temp file, starting compilation...');
 
-    // ── Spawn ams.exe ─────────────────────────────────────
-    const compiler = spawn(COMPILER_PATH, ['build', inputFile], {
+    // ── Build args by replacing {FILE} placeholder ─────────
+    const args = compileCommand
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((tok: string) => tok.replace(/\{FILE\}/g, inputFile));
+
+    // ── Spawn compiler ─────────────────────────────────────
+    const compilerProcess = spawn(compilerPath, args, {
+      cwd: dirname(compilerPath),
       timeout: 30_000,
     });
 
     let stderrBuf = '';
 
-    compiler.stdout.on('data', (chunk: Buffer) => {
+    compilerProcess.stdout.on('data', (chunk: Buffer) => {
       const text = chunk.toString();
       // Parse stage hints from compiler stdout if present
-      if (text.includes('Lexing') || text.includes('lexing')) {
+      if (/\[SUCCESS\]/i.test(text)) {
+        send('done', text.trim());
+      } else if (/\[ERROR\]/i.test(text)) {
+        send('error', text.trim());
+      } else if (/\bsemantic/i.test(text)) {
+        send('semantic', text.trim());
+      } else if (/\blex/i.test(text)) {
         send('lexing', text.trim());
-      } else if (text.includes('Parsing') || text.includes('parsing')) {
+      } else if (/\bpars/i.test(text)) {
         send('parsing', text.trim());
-      } else if (text.includes('Code') || text.includes('codegen')) {
+      } else if (/\bcode\s*gen|codegen|emit/i.test(text)) {
         send('codegen', text.trim());
       } else {
         send('codegen', text.trim());
       }
     });
 
-    compiler.stderr.on('data', (chunk: Buffer) => {
+    compilerProcess.stderr.on('data', (chunk: Buffer) => {
       stderrBuf += chunk.toString();
       send('error', chunk.toString().trim());
     });
 
-    compiler.on('close', async (code) => {
+    compilerProcess.on('close', async (code) => {
       try {
-        await unlink(inputFile).catch(() => {});
+        await unlink(inputFile).catch(() => { });
 
         if (code === 0) {
           send('done', `Compilation succeeded (exit ${code})`);
@@ -93,14 +120,14 @@ compileRouter.post('/', async (req: Request, res: Response): Promise<void> => {
       }
     });
 
-    compiler.on('error', (err) => {
+    compilerProcess.on('error', (err) => {
       send('error', `Compiler process error: ${err.message}`);
       logger.error({ err }, 'Compiler process error');
       res.end();
     });
 
     req.on('close', () => {
-      compiler.kill();
+      compilerProcess.kill();
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
