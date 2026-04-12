@@ -1,8 +1,30 @@
 import { Router, Request, Response } from 'express';
 import { readFile, readdir, stat, writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
+import { join, resolve, normalize } from 'path';
 
 export const fsRouter = Router();
+
+/** Reject path traversal attempts */
+function isSafePath(p: string): boolean {
+  const normalized = normalize(p);
+  // Block relative traversal patterns
+  if (normalized.includes('..')) return false;
+  // Must be an absolute path
+  if (!resolve(p).startsWith(normalized.charAt(0))) return false;
+  return true;
+}
+
+function validatePath(res: Response, filePath: string | undefined): filePath is string {
+  if (!filePath) {
+    res.status(400).json({ error: 'path is required' });
+    return false;
+  }
+  if (!isSafePath(filePath)) {
+    res.status(403).json({ error: 'Path traversal is not allowed' });
+    return false;
+  }
+  return true;
+}
 
 /**
  * GET /api/fs/readdir?path=<dir>
@@ -10,7 +32,7 @@ export const fsRouter = Router();
  */
 fsRouter.get('/readdir', async (req: Request, res: Response): Promise<void> => {
   const dirPath = req.query.path as string;
-  if (!dirPath) { res.status(400).json({ error: 'path is required' }); return; }
+  if (!validatePath(res, dirPath)) return;
 
   try {
     const entries = await readdir(dirPath, { withFileTypes: true });
@@ -42,7 +64,7 @@ fsRouter.get('/readdir', async (req: Request, res: Response): Promise<void> => {
  */
 fsRouter.get('/readfile', async (req: Request, res: Response): Promise<void> => {
   const filePath = req.query.path as string;
-  if (!filePath) { res.status(400).json({ error: 'path is required' }); return; }
+  if (!validatePath(res, filePath)) return;
 
   try {
     const content = await readFile(filePath, 'utf8');
@@ -59,7 +81,7 @@ fsRouter.get('/readfile', async (req: Request, res: Response): Promise<void> => 
  */
 fsRouter.post('/writefile', async (req: Request, res: Response): Promise<void> => {
   const { path: filePath, content } = req.body as { path: string; content: string };
-  if (!filePath) { res.status(400).json({ error: 'path is required' }); return; }
+  if (!validatePath(res, filePath)) return;
 
   try {
     await writeFile(filePath, content, 'utf8');
