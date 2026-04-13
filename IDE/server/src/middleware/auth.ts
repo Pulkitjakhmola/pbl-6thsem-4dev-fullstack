@@ -1,7 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET ?? 'ams-lang-ide-secret-key-change-me';
+const DEFAULT_SECRET = 'ams-lang-ide-secret-key-change-me';
+const JWT_SECRET = process.env.JWT_SECRET ?? DEFAULT_SECRET;
+
+if (JWT_SECRET === DEFAULT_SECRET) {
+  console.warn('[AUTH WARNING] Using default JWT secret. Set JWT_SECRET env variable for production.');
+}
 
 export interface JwtPayload {
   userId: string;
