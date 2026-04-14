@@ -545,6 +545,7 @@ html, body, #root {
 .dashboard__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
   gap: var(--sp-4);
   flex: 1;
   min-height: 0;
@@ -579,6 +580,17 @@ html, body, #root {
   animation: pulse 2s infinite;
 }
 .panel-card__body { flex: 1; overflow-y: auto; padding: var(--sp-3); min-height: 0; }
+.panel-card__body--log-stream { max-height: 360px; padding: 0; scroll-behavior: smooth; }
+.panel-card__body--alert-history { max-height: 280px; padding: 0; }
+
+/* Custom scrollbar for panels */
+.panel-card__body::-webkit-scrollbar { width: 6px; }
+.panel-card__body::-webkit-scrollbar-track { background: transparent; }
+.panel-card__body::-webkit-scrollbar-thumb { background: rgba(110,118,129,0.4); border-radius: 3px; }
+.panel-card__body::-webkit-scrollbar-thumb:hover { background: rgba(110,118,129,0.7); }
+
+/* Log count badge in header */
+.log-count-badge { font-size: 9px; background: var(--bg-hover); color: var(--text-muted); padding: 1px 6px; border-radius: 8px; margin-left: auto; font-weight: 500; font-family: var(--font-code); }
 
 /* Log entries */
 .log-entry {

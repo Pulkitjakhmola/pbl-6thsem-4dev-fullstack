@@ -106,6 +106,7 @@ function IDEPage() {
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('editor');
   const [showFolderPicker, setShowFolderPicker] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [folderInput, setFolderInput] = useState('');
 
   // Resizable panel sizes
@@ -199,9 +200,26 @@ function IDEPage() {
     if (!currentFile) return;
     if (window.electronAPI) {
       window.electronAPI.writeFile(currentFile.path, currentFile.content);
+    } else {
+      fetch('/api/fs/writefile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: currentFile.path, content: currentFile.content }),
+      }).catch(() => { /* ignore save errors in web mode */ });
     }
     setOpenFiles((prev) => prev.map((f) => f.path === activeFile ? { ...f, isDirty: false } : f));
   }, [activeFile, currentFile]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleSave]);
 
   const handleTabChange = useCallback((path: string) => {
     setActiveFile(path);
@@ -219,12 +237,39 @@ function IDEPage() {
     if (currentFile) compile(currentFile.content, currentFile.path);
   };
 
+  const handleDeploy = async () => {
+    if (!currentFile) return;
+    try {
+      const res = await fetch(`${settings.serverUrl}/api/deploy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: currentFile.content,
+          compilerPath: settings.compilerPath,
+          compileCommand: settings.compileCommand,
+          fileExtension: settings.fileExtension,
+          filePath: currentFile.path,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setActiveSessionId(data.sessionId);
+        setActiveTab('dashboard');
+      } else {
+        alert(`Deploy failed: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Deploy error: ${(err as Error).message}`);
+    }
+  };
+
   return (
     <div className="ide" style={{ height: 'calc(100vh - 48px)' }}>
       <Toolbar
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onCompile={handleCompile}
+        onDeploy={handleDeploy}
         isCompiling={isCompiling}
         hasActiveFile={!!currentFile}
         fileName={currentFile?.name}
@@ -269,13 +314,20 @@ function IDEPage() {
                 activeFile={activeFile}
                 onFileChange={handleFileChange}
                 onSave={handleSave}
+                onCompile={handleCompile}
                 onTabChange={handleTabChange}
                 onTabClose={handleTabClose}
+                settings={settings}
               />
               {/* ── AST resizer ── */}
               <div className="resizer resizer--col" onMouseDown={(e) => startDrag('ast', e)} />
               <div style={{ width: astW, flexShrink: 0 }}>
-                <ASTPanel source={currentFile?.content ?? ''} serverUrl={settings.serverUrl} />
+                <ASTPanel 
+                  source={currentFile?.content ?? ''} 
+                  serverUrl={settings.serverUrl}
+                  compilerPath={settings.compilerPath}
+                  astCommandFlag={settings.astCommandFlag}
+                />
               </div>
             </div>
 
@@ -290,16 +342,12 @@ function IDEPage() {
         </div>
       )}
 
-      {activeTab === 'dashboard' && (
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          <Dashboard serverUrl={settings.serverUrl} wsUrl={settings.wsUrl} />
-        </div>
-      )}
-      {activeTab === 'settings' && (
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          <Settings settings={settings} onSave={updateSettings} />
-        </div>
-      )}
+      <div style={{ flex: 1, overflow: 'auto', display: activeTab === 'dashboard' ? undefined : 'none' }}>
+        <Dashboard serverUrl={settings.serverUrl} wsUrl={settings.wsUrl} activeSessionId={activeSessionId} />
+      </div>
+      <div style={{ flex: 1, overflow: 'auto', display: activeTab === 'settings' ? undefined : 'none' }}>
+        <Settings settings={settings} onSave={updateSettings} />
+      </div>
 
       {/* Open Folder Modal (web mode only) */}
       {showFolderPicker && (

@@ -1,8 +1,9 @@
-import { useRef } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import MonacoEditor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type * as Monaco from 'monaco-editor';
 import { AMSLanguageDefinition, AMSTheme, registerAMSCompletions } from '../../languages/ams-language';
 import type { OpenFile } from '../../App';
+import type { AppSettings } from '../../hooks/useSettings';
 import { X, FolderOpen, Check } from 'lucide-react';
 
 export interface CompileOutputLine {
@@ -11,25 +12,117 @@ export interface CompileOutputLine {
   time: string;
 }
 
+/** Map common file extensions to Monaco built-in language IDs */
+const EXT_TO_LANGUAGE: Record<string, string> = {
+  '.js': 'javascript',
+  '.ts': 'typescript',
+  '.jsx': 'javascript',
+  '.tsx': 'typescript',
+  '.py': 'python',
+  '.c': 'c',
+  '.cpp': 'cpp',
+  '.h': 'c',
+  '.hpp': 'cpp',
+  '.java': 'java',
+  '.rs': 'rust',
+  '.go': 'go',
+  '.rb': 'ruby',
+  '.php': 'php',
+  '.cs': 'csharp',
+  '.swift': 'swift',
+  '.kt': 'kotlin',
+  '.lua': 'lua',
+  '.r': 'r',
+  '.sql': 'sql',
+  '.html': 'html',
+  '.css': 'css',
+  '.json': 'json',
+  '.xml': 'xml',
+  '.yaml': 'yaml',
+  '.yml': 'yaml',
+  '.md': 'markdown',
+  '.sh': 'shell',
+  '.bat': 'bat',
+  '.ps1': 'powershell',
+};
+
 interface CodeEditorProps {
   openFiles: OpenFile[];
   activeFile: string | null;
   onFileChange: (value: string) => void;
   onSave: () => void;
+  onCompile: () => void;
   onTabChange: (path: string) => void;
   onTabClose: (path: string) => void;
+  settings: AppSettings;
 }
 
 export function CodeEditor({
-  openFiles, activeFile, onFileChange, onSave, onTabChange, onTabClose,
+  openFiles, activeFile, onFileChange, onSave, onCompile, onTabChange, onTabClose, settings,
 }: CodeEditorProps) {
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
+  const [customLangReady, setCustomLangReady] = useState(false);
 
   const currentFile = openFiles.find((f) => f.path === activeFile);
 
+  // Determine which Monaco language ID to use
+  const resolveLanguage = (): string => {
+    // If a custom grammar JSON is loaded, use it
+    if (settings.grammarPath && customLangReady) return 'custom-lang';
+
+    // If extension matches AMS, use built-in AMS tokenizer
+    if (settings.fileExtension === '.ams') return 'ams';
+
+    // Check Monaco built-in languages by extension
+    const ext = settings.fileExtension?.toLowerCase() ?? '';
+    if (EXT_TO_LANGUAGE[ext]) return EXT_TO_LANGUAGE[ext];
+
+    // Fallback
+    return 'plaintext';
+  };
+
+  const resolveTheme = (): string => {
+    if (settings.grammarPath && customLangReady) return 'custom-dark';
+    if (settings.fileExtension === '.ams') return 'ams-dark';
+    return 'vs-dark';
+  };
+
+  // Load custom grammar if grammarPath is provided
+  useEffect(() => {
+    if (!monacoRef.current || !settings.grammarPath) {
+      setCustomLangReady(false);
+      return;
+    }
+
+    const loadGrammar = async () => {
+      try {
+        const res = await fetch(`${settings.serverUrl}/api/grammar?path=${encodeURIComponent(settings.grammarPath)}`);
+        if (!res.ok) throw new Error(`Failed to fetch grammar: ${res.status}`);
+        const grammar = await res.json();
+
+        const customLangId = 'custom-lang';
+        const monaco = monacoRef.current!;
+
+        if (!monaco.languages.getLanguages().some((l: { id: string }) => l.id === customLangId)) {
+          monaco.languages.register({ id: customLangId, extensions: [settings.fileExtension || '.custom'] });
+        }
+        monaco.languages.setMonarchTokensProvider(customLangId, grammar);
+        monaco.editor.defineTheme('custom-dark', AMSTheme);
+
+        setCustomLangReady(true);
+      } catch (err) {
+        console.error('Failed to load custom grammar:', err);
+        setCustomLangReady(false);
+      }
+    };
+
+    loadGrammar();
+  }, [settings.grammarPath, settings.serverUrl, settings.fileExtension]);
+
   const beforeMount: BeforeMount = (monaco) => {
     monacoRef.current = monaco;
+    // Always register AMS as a built-in option
     if (!monaco.languages.getLanguages().some((l: { id: string }) => l.id === 'ams')) {
       monaco.languages.register({ id: 'ams', extensions: ['.ams'], aliases: ['AMS', 'AutomonScript'] });
       monaco.languages.setMonarchTokensProvider('ams', AMSLanguageDefinition);
@@ -41,7 +134,14 @@ export function CodeEditor({
   const onMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => { onSave(); });
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyB, () => { onCompile(); });
     editor.focus();
+  };
+
+  // Determine accent color for file tabs based on configured extension
+  const isProjectFile = (name: string) => {
+    if (!settings.fileExtension) return false;
+    return name.endsWith(settings.fileExtension);
   };
 
   if (openFiles.length === 0) {
@@ -51,7 +151,7 @@ export function CodeEditor({
           <div className="empty-state__icon"><FolderOpen size={48} /></div>
           <div className="empty-state__title">No file open</div>
           <div className="empty-state__desc">
-            Select a <code style={{ color:'var(--accent)' }}>.ams</code> file from the Explorer, or open a file with <kbd>Ctrl+O</kbd>.
+            Select a file from the Explorer, or open a file with <kbd>Ctrl+O</kbd>.
           </div>
         </div>
       </div>
@@ -68,8 +168,8 @@ export function CodeEditor({
             className={`editor-tab${f.path === activeFile ? ' editor-tab--active' : ''}`}
             onClick={() => onTabChange(f.path)}
           >
-            <span style={{ color: f.name.endsWith('.ams') ? 'var(--accent)' : undefined }}>
-              {f.name}{f.isDirty ? ' ●' : ''}
+            <span style={{ color: isProjectFile(f.name) ? 'var(--accent)' : undefined }}>
+              {f.name}{f.isDirty ? ' *' : ''}
             </span>
             <span
               className="editor-tab__close"
@@ -85,14 +185,14 @@ export function CodeEditor({
       <div className="editor-monaco">
         <MonacoEditor
           height="100%"
-          language="ams"
-          theme="ams-dark"
+          language={resolveLanguage()}
+          theme={resolveTheme()}
           value={currentFile?.content ?? ''}
           onChange={(v) => onFileChange(v ?? '')}
           beforeMount={beforeMount}
           onMount={onMount}
           options={{
-            fontSize: 13,
+            fontSize: settings.fontSize,
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
             fontLigatures: true,
             lineNumbers: 'on',
@@ -104,7 +204,7 @@ export function CodeEditor({
             bracketPairColorization: { enabled: true },
             guides: { indentation: true, bracketPairs: true },
             suggest: { showKeywords: true, showSnippets: true },
-            quickSuggestions: { other: true, comments: false, strings: false },
+            quickSuggestions: { other: settings.autocomplete, comments: false, strings: false },
             padding: { top: 8, bottom: 8 },
             smoothScrolling: true,
             cursorBlinking: 'smooth',
@@ -158,9 +258,9 @@ export function OutputPanel({ compileOutput, isCompiling, progress }: OutputPane
         />
       )}
       <div className="terminal__header">
-        <span>●</span>
+        <span>--</span>
         <span>Output</span>
-        {isCompiling && <span style={{ fontSize:10, color:'var(--orange)' }}>Compiling…</span>}
+        {isCompiling && <span style={{ fontSize:10, color:'var(--orange)' }}>Compiling...</span>}
       </div>
       <div className="terminal__body" id="terminal-output">
         {compileOutput.length === 0 ? (
@@ -180,4 +280,3 @@ export function OutputPanel({ compileOutput, isCompiling, progress }: OutputPane
     </div>
   );
 }
-

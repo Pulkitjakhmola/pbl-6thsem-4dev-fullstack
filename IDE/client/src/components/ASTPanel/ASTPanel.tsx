@@ -13,6 +13,8 @@ export interface ASTNode {
 interface ASTPanelProps {
   source: string;
   serverUrl: string;
+  compilerPath: string;
+  astCommandFlag: string;
 }
 
 function countNodes(node: ASTNode): number {
@@ -24,7 +26,7 @@ function maxDepth(node: ASTNode, d = 0): number {
   return Math.max(...node.children.map((c) => maxDepth(c, d + 1)));
 }
 
-export function ASTPanel({ source, serverUrl }: ASTPanelProps) {
+export function ASTPanel({ source, serverUrl, compilerPath, astCommandFlag }: ASTPanelProps) {
   const [ast, setAst] = useState<ASTNode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [parseMs, setParseMs] = useState(0);
@@ -40,7 +42,7 @@ export function ASTPanel({ source, serverUrl }: ASTPanelProps) {
         const res = await fetch(`${serverUrl}/api/parse`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source: src }),
+          body: JSON.stringify({ source: src, compilerPath, astCommandFlag }),
         });
         const data = await res.json() as { ast: ASTNode; error?: string };
         setParseMs(Math.round(performance.now() - t0));
@@ -50,7 +52,7 @@ export function ASTPanel({ source, serverUrl }: ASTPanelProps) {
         setError((err as Error).message);
       }
     },
-    [serverUrl]
+    [serverUrl, compilerPath, astCommandFlag]
   );
 
   useEffect(() => {
@@ -94,7 +96,7 @@ export function ASTPanel({ source, serverUrl }: ASTPanelProps) {
           <ASTNodeView node={ast} depth={0} />
         ) : (
           <div style={{ color:'var(--text-muted)', fontSize:11, textAlign:'center', paddingTop:24 }}>
-            Write or open an <span style={{ color:'var(--accent)' }}>.ams</span> file to see the AST
+            Open a source file to see the AST
           </div>
         )}
       </div>

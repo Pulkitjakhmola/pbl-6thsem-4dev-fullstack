@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiGet, apiPost, apiDelete } from '../lib/api';
-import { Radio, Plus, Trash2, ArrowLeft, Key, Copy, Check, Server } from 'lucide-react';
+import { Radio, Plus, Trash2, ArrowLeft, Key, Copy, Check, Server, Globe, Feather, FileText, Cloud, Settings as Cog } from 'lucide-react';
 
 const SOURCE_TYPES = [
-  { value: 'NGINX', label: 'Nginx', icon: '🌐' },
-  { value: 'APACHE', label: 'Apache', icon: '🪶' },
-  { value: 'SYSLOG', label: 'Syslog', icon: '📋' },
-  { value: 'CLOUDWATCH', label: 'CloudWatch', icon: '☁️' },
-  { value: 'CUSTOM', label: 'Custom', icon: '⚙️' },
+  { value: 'NGINX', label: 'Nginx', Icon: Globe },
+  { value: 'APACHE', label: 'Apache', Icon: Feather },
+  { value: 'SYSLOG', label: 'Syslog', Icon: FileText },
+  { value: 'CLOUDWATCH', label: 'CloudWatch', Icon: Cloud },
+  { value: 'CUSTOM', label: 'Custom', Icon: Cog },
 ];
 
 export function LogSources() {
@@ -79,7 +79,7 @@ export function LogSources() {
                   className={`source-type-btn ${type === st.value ? 'source-type-btn--active' : ''}`}
                   onClick={() => setType(st.value)}
                 >
-                  <span style={{ fontSize: 20 }}>{st.icon}</span>
+                  <st.Icon size={20} />
                   <span>{st.label}</span>
                 </button>
               ))}

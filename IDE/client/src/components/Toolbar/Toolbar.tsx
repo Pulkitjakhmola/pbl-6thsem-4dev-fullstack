@@ -5,6 +5,7 @@ interface ToolbarProps {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
   onCompile: () => void;
+  onDeploy: () => void;
   isCompiling: boolean;
   hasActiveFile: boolean;
   fileName?: string;
@@ -13,7 +14,7 @@ interface ToolbarProps {
 const isElectron = typeof window !== 'undefined' && !!window.electronAPI;
 
 export function Toolbar({
-  activeTab, onTabChange, onCompile, isCompiling, hasActiveFile, fileName,
+  activeTab, onTabChange, onCompile, onDeploy, isCompiling, hasActiveFile, fileName,
 }: ToolbarProps) {
   const handleMinimize = () => window.electronAPI?.minimize();
   const handleMaximize = () => window.electronAPI?.maximize();
@@ -60,7 +61,7 @@ export function Toolbar({
         >
           {isCompiling ? <><Loader size={12} className="spin" /> Compiling...</> : <><Play size={12} /> Compile</>}
         </button>
-        <button className="btn btn--deploy" disabled={isCompiling} title="Deploy">
+        <button className="btn btn--deploy" disabled={isCompiling || !hasActiveFile} title="Deploy" onClick={onDeploy}>
           <Upload size={12} /> Deploy
         </button>
       </div>

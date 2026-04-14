@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Binary, Link, Sliders, Bell, Check } from 'lucide-react';
+import { Settings as SettingsIcon, Binary, Link, Sliders, Bell, Check, Layers } from 'lucide-react';
 import type { AppSettings } from '../../hooks/useSettings';
+import { LANGUAGE_PRESETS } from '../../hooks/useSettings';
 
 interface SettingsProps {
   settings: AppSettings;
@@ -34,6 +35,20 @@ export function Settings({ settings, onSave }: SettingsProps) {
     }
   };
 
+  const applyPreset = (idx: number) => {
+    const preset = LANGUAGE_PRESETS[idx];
+    if (!preset) return;
+    setLocal((prev) => ({
+      ...prev,
+      compilerPath: preset.compilerPath,
+      compileCommand: preset.compileCommand,
+      fileExtension: preset.fileExtension,
+      languageName: preset.languageName,
+      grammarPath: preset.grammarPath,
+      astCommandFlag: preset.astCommandFlag,
+    }));
+  };
+
   const testConnection = async () => {
     try {
       const res = await fetch(`${local.serverUrl}/api/health`);
@@ -51,6 +66,35 @@ export function Settings({ settings, onSave }: SettingsProps) {
         Settings
       </div>
 
+      {/* Language Preset */}
+      <div className="settings-section">
+        <div className="settings-section__header">
+          <Layers size={14} />
+          Language / Compiler Preset
+        </div>
+        <div className="settings-section__body">
+          <div className="form-row">
+            <label className="form-label">Quick Setup</label>
+            <select
+              className="form-input"
+              onChange={(e) => applyPreset(parseInt(e.target.value, 10))}
+              defaultValue=""
+              style={{ cursor: 'pointer' }}
+            >
+              <option value="" disabled>
+                -- Select a preset to auto-fill settings --
+              </option>
+              {LANGUAGE_PRESETS.map((p, i) => (
+                <option key={i} value={i}>{p.label}</option>
+              ))}
+            </select>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              Selecting a preset fills in the compiler fields below. You can still customize them after.
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Compiler Settings */}
       <div className="settings-section">
         <div className="settings-section__header">
@@ -59,16 +103,52 @@ export function Settings({ settings, onSave }: SettingsProps) {
         </div>
         <div className="settings-section__body">
           <div className="form-row">
-            <label className="form-label">Compiler Path (ams.exe)</label>
+            <label className="form-label">Language Name</label>
+            <input
+              className="form-input"
+              value={local.languageName}
+              onChange={(e) => set('languageName', e.target.value)}
+              placeholder="e.g. AMS, C, Python"
+              spellCheck={false}
+            />
+          </div>
+          <div className="form-row">
+            <label className="form-label">File Extension</label>
+            <input
+              className="form-input"
+              value={local.fileExtension}
+              onChange={(e) => set('fileExtension', e.target.value)}
+              placeholder=".ams, .c, .py, etc."
+              spellCheck={false}
+              style={{ width: 120 }}
+            />
+          </div>
+          <div className="form-row">
+            <label className="form-label">Compiler / Interpreter Path</label>
             <div className="form-input--with-btn">
               <input
                 className="form-input"
                 value={local.compilerPath}
                 onChange={(e) => set('compilerPath', e.target.value)}
+                placeholder="e.g. gcc, python, /path/to/compiler"
                 spellCheck={false}
               />
               <button className="btn btn--ghost" onClick={handleBrowse}>Browse</button>
             </div>
+          </div>
+          <div className="form-row">
+            <label className="form-label">Compile Command</label>
+            <input
+              className="form-input"
+              value={local.compileCommand}
+              onChange={(e) => set('compileCommand', e.target.value)}
+              placeholder="build {FILE}"
+              spellCheck={false}
+            />
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              Use <code style={{ color: 'var(--accent)' }}>{'{FILE}'}</code> as a placeholder for the source file path.
+              Example: <code style={{ color: 'var(--text-secondary)' }}>build {'{FILE}'}</code> or <code style={{ color: 'var(--text-secondary)' }}>-o {'{FILE}'}.out {'{FILE}'}</code>
+            </span>
           </div>
           <div className="form-row">
             <label className="form-label">Project / Workspace Path</label>
@@ -88,6 +168,32 @@ export function Settings({ settings, onSave }: SettingsProps) {
               <input type="checkbox" checked={local.verboseCompiler} onChange={(e) => set('verboseCompiler', e.target.checked)} />
               <span className="toggle__slider" />
             </label>
+          </div>
+          <div className="form-row">
+            <label className="form-label">Grammar Path (Monarch JSON)</label>
+            <input
+              className="form-input"
+              value={local.grammarPath}
+              onChange={(e) => set('grammarPath', e.target.value)}
+              placeholder="Optional -- path to custom Monarch grammar JSON"
+              spellCheck={false}
+            />
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              For common languages (C, Python, JS, etc.) Monaco has built-in highlighting -- no grammar file needed.
+            </span>
+          </div>
+          <div className="form-row">
+            <label className="form-label">AST Command Flag</label>
+            <input
+              className="form-input"
+              value={local.astCommandFlag}
+              onChange={(e) => set('astCommandFlag', e.target.value)}
+              placeholder="Optional -- e.g. --dump-ast"
+              spellCheck={false}
+            />
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              If your compiler supports dumping AST to stdout, set the flag here. Otherwise the built-in parser is used.
+            </span>
           </div>
         </div>
       </div>
@@ -168,7 +274,7 @@ export function Settings({ settings, onSave }: SettingsProps) {
           </div>
           <div className="form-row">
             <label className="form-label">Slack Webhook URL</label>
-            <input className="form-input" value={local.slackWebhook} onChange={(e) => set('slackWebhook', e.target.value)} placeholder="https://hooks.slack.com/…" />
+            <input className="form-input" value={local.slackWebhook} onChange={(e) => set('slackWebhook', e.target.value)} placeholder="https://hooks.slack.com/..." />
           </div>
           <div className="form-row">
             <label className="form-label">API Endpoint</label>

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } from 'electron';
 import { join } from 'path';
-import { readFile, writeFile, readdir, stat, mkdir } from 'fs/promises';
+import { readFile, writeFile, readdir, stat, mkdir, unlink, rename } from 'fs/promises';
 import { spawn } from 'child_process';
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -82,6 +82,16 @@ ipcMain.handle('fs:readDir', async (_e, dirPath: string) => {
 
 ipcMain.handle('fs:mkdir', async (_e, dirPath: string) => {
   await mkdir(dirPath, { recursive: true });
+  return { ok: true };
+});
+
+ipcMain.handle('fs:deleteFile', async (_e, filePath: string) => {
+  await unlink(filePath);
+  return { ok: true };
+});
+
+ipcMain.handle('fs:renameFile', async (_e, oldPath: string, newPath: string) => {
+  await rename(oldPath, newPath);
   return { ok: true };
 });
 

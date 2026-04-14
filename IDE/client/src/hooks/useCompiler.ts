@@ -26,6 +26,16 @@ export function useCompiler(settings: AppSettings) {
   const compile = useCallback(
     async (source: string, _filePath?: string) => {
       if (isCompiling) return;
+
+      if (!settings.compilerPath) {
+        setCompileOutput([{
+          stage: 'error',
+          message: 'No compiler path configured. Go to Settings to set it up.',
+          time: new Date().toLocaleTimeString('en-US', { hour12: false }),
+        }]);
+        return;
+      }
+
       setCompileOutput([]);
       setProgress(0);
       setIsCompiling(true);
@@ -36,7 +46,12 @@ export function useCompiler(settings: AppSettings) {
         const res = await fetch(`${settings.serverUrl}/api/compile`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source }),
+          body: JSON.stringify({
+            source,
+            compilerPath: settings.compilerPath,
+            compileCommand: settings.compileCommand,
+            fileExtension: settings.fileExtension,
+          }),
           signal: abortRef.current.signal,
         });
 

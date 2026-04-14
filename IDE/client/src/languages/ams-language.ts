@@ -1,44 +1,113 @@
 import type * as Monaco from 'monaco-editor';
 
-/** AMS-Lang Monarch tokenizer for Monaco Editor */
+/** AMS-Lang Monarch tokenizer for Monaco Editor -- updated for the new grammar */
 export const AMSLanguageDefinition: Monaco.languages.IMonarchLanguage = {
-  keywords: [
-    'MONITOR', 'WATCH', 'SET', 'RULE', 'SEVERITY', 'WHEN', 'AND', 'OR', 'NOT',
-    'OCCURS', 'TIMES', 'IN', 'WITHIN', 'MINUTES', 'SECONDS', 'HOURS',
-    'IF', 'DO', 'END', 'TRUE', 'FALSE', 'regex',
+  defaultToken: '',
+  ignoreCase: false,
+
+  // Section keywords that define program structure
+  sections: [
+    'GLOBAL', 'SOURCES', 'SOURCE', 'EVENTS', 'EVENT',
+    'OBSERVERS', 'OBSERVER', 'FUNCTIONS', 'FUNCTION',
   ],
-  severities: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
-  actions: ['SEND_EMAIL', 'ALERT', 'LOG', 'CALL_API', 'EXECUTE_SCRIPT', 'CONSOLE', 'BLOCK_IP'],
-  operators: ['==', '!=', '>', '<', '>=', '<=', '='],
+
+  // Data type keywords
+  types: [
+    'INT', 'FLOAT', 'STRING', 'BOOL', 'VOID',
+    'LOG_SOURCE', 'LOG_DATA', 'LOG_RECORD',
+  ],
+
+  // Runtime and scheduling keywords
+  runtime: [
+    'TRACK', 'CHECK', 'EVERY', 'AT', 'CONTINUOUSLY',
+    'ON', 'OBSERVS', 'UNSHARE', 'SIGNAL',
+  ],
+
+  // Control flow keywords
+  control: ['IF', 'ELSE'],
+
+  // Log source operation keywords
+  logOps: ['OPEN', 'READ', 'WRITE', 'MODE'],
+
+  // Import / merge keywords
+  imports: ['IMPORT', 'MERGE'],
+
+  // Boolean literals
+  booleans: ['TRUE', 'FALSE'],
+
+  // Time unit tokens
+  timeUnits: ['MS', 'SEC', 'MIN', 'HOUR'],
+
+  // Named operators (word-form)
+  namedOperators: [
+    'ADD', 'SUBTRACT', 'MULTIPLY', 'DIVIDE', 'REMAINDER', 'POWER',
+    'EQUALS', 'AND', 'OR', 'NOT',
+  ],
+
+  // Symbol operators
+  operators: ['==', '!=', '>=', '<=', '>', '<', '=', '+', '-', '*', '/', '%', '^', '&', '|', '!'],
 
   tokenizer: {
     root: [
-      // Comments
-      [/\/\/.*$/, 'comment'],
+      // Multi-line comments: ## ... ##
+      [/##/, 'comment', '@mlComment'],
 
-      // Keywords
-      [/\b(MONITOR|WATCH|SET|RULE|SEVERITY|WHEN|AND|OR|NOT)\b/, 'keyword.control'],
-      [/\b(OCCURS|TIMES|IN|WITHIN|WITHIN|IF|DO|END)\b/, 'keyword.other'],
-      [/\b(MINUTES|SECONDS|HOURS)\b/, 'keyword.time'],
+      // Single-line comments: # ...
+      [/#.*$/, 'comment'],
+
+      // Section headers (keyword followed by colon)
+      [/\b(GLOBAL|SOURCES|EVENTS|OBSERVERS|FUNCTIONS)\b(?=\s*:)/, 'keyword.section'],
+
+      // Section-level entity keywords
+      [/\b(SOURCE|EVENT|OBSERVER|FUNCTION)\b/, 'keyword.section'],
+
+      // Type keywords
+      [/\b(INT|FLOAT|STRING|BOOL|VOID|LOG_SOURCE|LOG_DATA|LOG_RECORD)\b/, 'keyword.type'],
+
+      // Runtime / scheduling keywords
+      [/\b(TRACK|CHECK|EVERY|AT|CONTINUOUSLY|ON|OBSERVS|UNSHARE|SIGNAL)\b/, 'keyword.runtime'],
+
+      // Control flow
+      [/\b(ELSE)\s+(IF)\b/, { cases: { '@': ['keyword.control', 'keyword.control'] } }],
+      [/\b(IF|ELSE)\b/, 'keyword.control'],
+
+      // Import / merge
+      [/\b(IMPORT|MERGE)\b/, 'keyword.import'],
+
+      // Log source operations
+      [/\b(OPEN|READ|WRITE|MODE)\b/, 'keyword.logop'],
+
+      // Time units
+      [/\b(MS|SEC|MIN|HOUR)\b/, 'keyword.time'],
+
+      // Boolean literals
       [/\b(TRUE|FALSE)\b/, 'constant.language'],
-      [/\b(LOW|MEDIUM|HIGH|CRITICAL)\b/, 'keyword.severity'],
-      [/\b(regex)\b/, 'keyword.special'],
 
-      // Actions
-      [/\b(SEND_EMAIL|ALERT|LOG|CALL_API|EXECUTE_SCRIPT|CONSOLE|BLOCK_IP)\b/, 'entity.name.function'],
+      // Named operators
+      [/\b(ADD|SUBTRACT|MULTIPLY|DIVIDE|REMAINDER|POWER)\b/, 'keyword.operator'],
+      [/\b(EQUALS|AND|OR|NOT)\b/, 'keyword.operator'],
+      [/\b(GREATER|LESS)\s+(THAN|EQUAL)\b/, 'keyword.operator'],
+
+      // Time literals (HH:MM)
+      [/\b[0-2][0-9]:[0-5][0-9]\b/, 'number.time'],
+
+      // Float literals
+      [/\b[0-9]+\.[0-9]+\b/, 'number.float'],
+
+      // Integer literals
+      [/\b[0-9]+\b/, 'number'],
 
       // Strings
       [/"([^"\\]|\\.)*$/, 'string.invalid'],
       [/"/, 'string', '@string'],
 
-      // Numbers
-      [/\d+/, 'number'],
-
-      // Operators
+      // Symbol operators
       [/[=!<>]+/, 'operator'],
+      [/[+\-*/%^&|!]/, 'operator'],
 
-      // Parens / punctuation
-      [/[(){}[\]]/, 'delimiter.bracket'],
+      // Delimiters
+      [/[{}()]/, 'delimiter.bracket'],
+      [/[;:,.]/, 'delimiter'],
 
       // Identifiers
       [/[a-zA-Z_][a-zA-Z0-9_]*/, 'identifier'],
@@ -52,10 +121,16 @@ export const AMSLanguageDefinition: Monaco.languages.IMonarchLanguage = {
       [/\\./, 'string.escape'],
       [/"/, 'string', '@pop'],
     ],
+
+    mlComment: [
+      [/[^#]+/, 'comment'],
+      [/##/, 'comment', '@pop'],
+      [/#/, 'comment'],
+    ],
   },
 };
 
-/** Autocomplete provider for AMS DSL keywords + snippets */
+/** Autocomplete provider for AMS-Lang keywords + snippets */
 export function registerAMSCompletions(monaco: typeof Monaco): void {
   monaco.languages.registerCompletionItemProvider('ams', {
     provideCompletionItems(model, position) {
@@ -74,31 +149,109 @@ export function registerAMSCompletions(monaco: typeof Monaco): void {
       const K = monaco.languages.CompletionItemKind;
       return {
         suggestions: [
-          mk('MONITOR', K.Keyword, 'MONITOR "${1:filename}"', 'Monitor a log file'),
-          mk('WATCH json', K.Keyword, 'WATCH json "${1:file.json}"', 'Watch a JSON data source'),
-          mk('WATCH csv', K.Keyword, 'WATCH csv "${1:file.csv}"', 'Watch a CSV data source'),
-          mk('WATCH html', K.Keyword, 'WATCH html "${1:https://example.com}"', 'Watch an HTML page'),
-          mk('SET', K.Keyword, 'SET ${1:var} = ${2:value}', 'Set a variable'),
-          mk('RULE block', K.Snippet,
-            'RULE ${1:RuleName} SEVERITY ${2|LOW,MEDIUM,HIGH,CRITICAL|}\nWHEN "${3:PATTERN}"\nOCCURS ${4:5} TIMES IN ${5:10} MINUTES\nDO\n\t${6:ALERT("${7:message}")}\nEND',
-            'Insert a full RULE block'),
-          mk('WHEN', K.Keyword, 'WHEN "${1:PATTERN}"', 'Event pattern match'),
-          mk('WHEN regex', K.Keyword, 'WHEN regex("${1:.*pattern.*}")', 'Regex pattern match'),
-          mk('OCCURS', K.Keyword, 'OCCURS ${1:5} TIMES IN ${2:10} MINUTES', 'Time-window occurrence'),
-          mk('WITHIN', K.Keyword, 'WITHIN ${1:30} SECONDS', 'Time window (within)'),
-          mk('IF', K.Keyword, 'IF ${1:field} ${2|==,!=,>,<,>=,<=|} ${3:value}', 'Field condition'),
-          mk('DO', K.Keyword, 'DO\n\t$0\nEND', 'Action block'),
-          mk('SEND_EMAIL', K.Function, 'SEND_EMAIL("${1:email@example.com}")', 'Send an email alert'),
-          mk('ALERT', K.Function, 'ALERT("${1:alert message}")', 'Trigger an alert'),
-          mk('LOG', K.Function, 'LOG("${1:alerts.log}")', 'Log to a file'),
-          mk('CALL_API', K.Function, 'CALL_API("${1:https://api.example.com}")', 'Call an API endpoint'),
-          mk('EXECUTE_SCRIPT', K.Function, 'EXECUTE_SCRIPT("${1:script.sh}")', 'Execute a shell script'),
-          mk('CONSOLE', K.Function, 'CONSOLE("${1:message}")', 'Print to console'),
-          mk('BLOCK_IP', K.Function, 'BLOCK_IP("${1:192.168.1.100}")', 'Block an IP address'),
-          mk('AND', K.Keyword, 'AND "${1:PATTERN}"', 'Additional event pattern'),
-          mk('END', K.Keyword, 'END', 'End a RULE block'),
-          // Severity levels
-          ...(['LOW','MEDIUM','HIGH','CRITICAL'] as const).map((s) => mk(s, K.EnumMember, s, `Severity: ${s}`)),
+          // ── Program Structure ──────────────────────────────
+          mk('Program Skeleton', K.Snippet,
+            [
+              'GLOBAL:',
+              '    ${1:# global declarations}',
+              '',
+              'SOURCES:',
+              '    SOURCE ${2:MySource} CHECK EVERY ${3:5} ${4|SEC,MIN,HOUR,MS|}',
+              '        ${5:# source body}',
+              '    ;',
+              '',
+              'EVENTS:',
+              '    EVENT ${6:MyEvent} ON ${2:MySource}',
+              '        ${7:# event body}',
+              '    ;',
+              '',
+              'OBSERVERS:',
+              '    OBSERVER ${8:MyObserver} OBSERVS ${6:MyEvent}',
+              '        ${9:# observer body}',
+              '    ;',
+              '',
+            ].join('\n'),
+            'Insert a complete AMS program skeleton with all sections'),
+
+          // ── Section Keywords ───────────────────────────────
+          mk('GLOBAL:', K.Keyword, 'GLOBAL:\n    $0', 'Global section for imports and shared declarations'),
+          mk('SOURCES:', K.Keyword, 'SOURCES:\n    $0', 'Sources section for log source polling'),
+          mk('EVENTS:', K.Keyword, 'EVENTS:\n    $0', 'Events section for reactive handlers'),
+          mk('OBSERVERS:', K.Keyword, 'OBSERVERS:\n    $0', 'Observers section for event watchers'),
+          mk('FUNCTIONS:', K.Keyword, 'FUNCTIONS:\n    $0', 'Functions section for reusable logic'),
+
+          // ── Entity Definitions ─────────────────────────────
+          mk('SOURCE block (braces)', K.Snippet,
+            'SOURCE ${1:name} CHECK EVERY ${2:5} ${3|SEC,MIN,HOUR,MS|} {\n    $0\n}',
+            'Define a SOURCE with a periodic schedule (brace syntax)'),
+
+          mk('SOURCE block (semicolon)', K.Snippet,
+            'SOURCE ${1:name} CHECK EVERY ${2:5} ${3|SEC,MIN,HOUR,MS|}\n    $0\n;',
+            'Define a SOURCE with a periodic schedule (semicolon syntax)'),
+
+          mk('SOURCE CONTINUOUSLY', K.Snippet,
+            'SOURCE ${1:name} CHECK CONTINUOUSLY {\n    $0\n}',
+            'Define a SOURCE that runs continuously'),
+
+          mk('EVENT block', K.Snippet,
+            'EVENT ${1:name} ON ${2:sourceName}\n    $0\n;',
+            'Define an EVENT triggered by a SOURCE signal'),
+
+          mk('EVENT with SIGNAL condition', K.Snippet,
+            'EVENT ${1:name} ON ${2:sourceName} SIGNAL ${3:condition}\n    $0\n;',
+            'Define an EVENT with a specific signal condition'),
+
+          mk('OBSERVER block', K.Snippet,
+            'OBSERVER ${1:name} OBSERVS ${2:eventName}\n    $0\n;',
+            'Define an OBSERVER that watches an EVENT'),
+
+          mk('FUNCTION block', K.Snippet,
+            'FUNCTION ${1:name}(${2:params}) {\n    $0\n}',
+            'Define a reusable FUNCTION'),
+
+          // ── Variable Declarations ──────────────────────────
+          mk('INT', K.Keyword, 'INT ${1:name} = ${2:0}', 'Declare an integer variable'),
+          mk('FLOAT', K.Keyword, 'FLOAT ${1:name} = ${2:0.0}', 'Declare a floating-point variable'),
+          mk('STRING', K.Keyword, 'STRING ${1:name} = "${2:}"', 'Declare a string variable'),
+          mk('BOOL', K.Keyword, 'BOOL ${1:name} = ${2|TRUE,FALSE|}', 'Declare a boolean variable'),
+          mk('TRACK INT', K.Snippet, 'TRACK INT ${1:name} = ${2:0}', 'Declare a TRACK variable (persists across SOURCE invocations)'),
+          mk('TRACK STRING', K.Snippet, 'TRACK STRING ${1:name} = "${2:}"', 'Declare a tracked string variable'),
+          mk('UNSHARE', K.Keyword, 'UNSHARE ${1|INT,FLOAT,STRING,BOOL|} ${2:name} = ${3:value}', 'Declare a private EVENT variable (not shared with observers)'),
+
+          // ── LOG_SOURCE Operations ──────────────────────────
+          mk('LOG_SOURCE (read)', K.Snippet,
+            'LOG_SOURCE ${1:name} = OPEN LOG_SOURCE "${2:path/to/log}" READ MODE',
+            'Open a log source file for reading'),
+          mk('LOG_SOURCE (write)', K.Snippet,
+            'LOG_SOURCE ${1:name} = OPEN LOG_SOURCE "${2:path/to/log}" WRITE MODE',
+            'Open a log source file for writing'),
+          mk('LOG_DATA', K.Keyword, 'LOG_DATA ${1:name} = ${2:source}.filter(${3:criteria})', 'Filter log data from a LOG_SOURCE'),
+          mk('LOG_RECORD', K.Keyword, 'LOG_RECORD ${1:name} = ${2:data}.first()', 'Get the first record from LOG_DATA'),
+
+          // ── Runtime Keywords ───────────────────────────────
+          mk('SIGNAL', K.Keyword, 'SIGNAL ${1:condition}', 'Emit a signal (optionally conditional)'),
+          mk('SIGNAL TRUE', K.Keyword, 'SIGNAL TRUE', 'Always emit a signal'),
+          mk('CHECK EVERY', K.Snippet, 'CHECK EVERY ${1:5} ${2|SEC,MIN,HOUR,MS|}', 'Schedule periodic execution'),
+          mk('CHECK CONTINUOUSLY', K.Keyword, 'CHECK CONTINUOUSLY', 'Run source continuously'),
+
+          // ── Control Flow ───────────────────────────────────
+          mk('IF (braces)', K.Snippet, 'IF ${1:condition} {\n    $0\n}', 'Conditional statement (brace syntax)'),
+          mk('IF-ELSE', K.Snippet, 'IF ${1:condition} {\n    ${2:body}\n}\nELSE {\n    ${3:body}\n}', 'If-else conditional'),
+
+          // ── Import / Merge ─────────────────────────────────
+          mk('IMPORT', K.Keyword, 'IMPORT "${1:module}"', 'Import an external module'),
+          mk('MERGE', K.Keyword, 'MERGE "${1:file}"', 'Merge another AMS file'),
+
+          // ── Common Built-in Functions ──────────────────────
+          mk('PRINTLN', K.Function, 'PRINTLN(${1:"message"})', 'Print a line to console'),
+          mk('PRINT', K.Function, 'PRINT(${1:"message"})', 'Print to console without newline'),
+
+          // ── Boolean and Operators ──────────────────────────
+          mk('TRUE', K.Keyword, 'TRUE', 'Boolean true'),
+          mk('FALSE', K.Keyword, 'FALSE', 'Boolean false'),
+          mk('AND', K.Keyword, 'AND', 'Logical AND operator'),
+          mk('OR', K.Keyword, 'OR', 'Logical OR operator'),
+          mk('NOT', K.Keyword, 'NOT', 'Logical NOT operator'),
         ],
       };
     },
@@ -111,20 +264,25 @@ export const AMSTheme: Monaco.editor.IStandaloneThemeData = {
   inherit: true,
   rules: [
     { token: 'comment',            foreground: '484f58', fontStyle: 'italic' },
-    { token: 'keyword.control',    foreground: 'bc8cff', fontStyle: 'bold' },
-    { token: 'keyword.other',      foreground: '79c0ff' },
+    { token: 'keyword.section',    foreground: 'bc8cff', fontStyle: 'bold' },
+    { token: 'keyword.type',       foreground: '79c0ff' },
+    { token: 'keyword.runtime',    foreground: '39c5cf' },
+    { token: 'keyword.control',    foreground: 'bc8cff' },
+    { token: 'keyword.import',     foreground: 'f78166' },
+    { token: 'keyword.logop',      foreground: 'ffa657' },
     { token: 'keyword.time',       foreground: '39c5cf' },
-    { token: 'keyword.severity',   foreground: 'ff9f43', fontStyle: 'bold' },
-    { token: 'keyword.special',    foreground: 'f78166' },
+    { token: 'keyword.operator',   foreground: 'ff7b72' },
     { token: 'constant.language',  foreground: '56d364' },
-    { token: 'entity.name.function', foreground: 'ffa657', fontStyle: 'bold' },
+    { token: 'number',             foreground: 'd2a679' },
+    { token: 'number.float',       foreground: 'd2a679' },
+    { token: 'number.time',        foreground: '39c5cf' },
     { token: 'string',             foreground: 'a5d6ff' },
     { token: 'string.escape',      foreground: 'ffa657' },
     { token: 'string.invalid',     foreground: 'f85149' },
-    { token: 'number',             foreground: 'd2a679' },
     { token: 'operator',           foreground: 'ff7b72' },
     { token: 'identifier',         foreground: 'e6edf3' },
     { token: 'delimiter.bracket',  foreground: 'ffa657' },
+    { token: 'delimiter',          foreground: '8b949e' },
     { token: 'white',              foreground: 'e6edf3' },
   ],
   colors: {

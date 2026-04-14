@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import axios from 'axios';
+import { useState } from 'react';
 import type { ASTNode } from './ASTPanel';
 
 const SERVER_URL_DEFAULT = 'http://localhost:3001';
